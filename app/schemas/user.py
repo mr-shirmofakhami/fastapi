@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, constr, validator
 from typing import Optional
 
 
@@ -8,15 +8,21 @@ class UserBase(BaseModel):
 
 
 class UserCreate(BaseModel):
-    name: str
+    username: constr(min_length=3, max_length=50)
     email: EmailStr
-    password: str
+    password: constr(min_length=8)
     role: str | None = "user"
+
+    @validator("password")
+    def validate_password_strength(cls, v):
+        if " " in v:
+            raise ValueError("Password cannot contain spaces")
+        return v
 
 
 class UserResponse(BaseModel):
     id: int
-    name: str
+    username: str
     email: EmailStr
     role: str
 
@@ -25,8 +31,10 @@ class UserResponse(BaseModel):
 
 
 class UserUpdate(BaseModel):
-    name: Optional[str] = None
-    email: Optional[EmailStr] = None
+    username: constr(min_length=3, max_length=50) | None = None
+    email: EmailStr | None = None
+    role: str | None = None
+    password: constr(min_length=8) | None = None
 
 
 class UserLogin(BaseModel):

@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.crud.user import update_user_by_id
+from app.crud.token import revoke_all_tokens_for_user
+from app.crud.user import update_user_by_id, delete_user_by_id
 from app.schemas.user import UserCreate, UserUpdate, UserResponse
 from app.crud import user as user_crud
 from app.utils.security import get_current_user, get_current_admin, owner_or_admin
@@ -57,11 +58,29 @@ def update_user(
     return updated_user
 
 
-@router.delete("/{user_id}")
-def delete_user(user_id: int, db: Session = Depends(get_db)):
-    if not user_crud.delete_user(db, user_id):
+# @router.delete("/{user_id}")
+# def delete_user(user_id: int, db: Session = Depends(get_db)):
+#     if not user_crud.delete_user(db, user_id):
+#         raise HTTPException(status_code=404, detail="User not found")
+#     return {"message": f"User {user_id} deleted successfully"}
+
+
+@router.delete("/{user_id}", summary="Delete a user (Owner or Admin)")
+def delete_user(
+        user_id: int,
+        db: Session = Depends(get_db),
+        _: object = Depends(owner_or_admin)
+):
+    # Revoke refresh tokens first
+    revoke_all_tokens_for_user(db, user_id)
+
+    # Delete the user
+    success = delete_user_by_id(db, user_id)
+    if not success:
         raise HTTPException(status_code=404, detail="User not found")
+
     return {"message": f"User {user_id} deleted successfully"}
+
 
 # @router.get("/me", response_model=UserResponse)
 # def read_users_me(current_user: User = Depends(get_current_user)):
