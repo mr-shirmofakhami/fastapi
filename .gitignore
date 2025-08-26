@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+.Python
+*.so
+
+# Virtual environments
+.venv/
+env/
+venv/
+ENV/
+
+# IDE specific
+.idea/
+.vscode/
+*.iml
+
+# Byte-compiled
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Logs
+*.log
+
+# Local configs & secrets
+.env
+*.env.*
+.DS_Store
+
+# Alembic migrations cache
+alembic/__pycache__/
+alembic/versions/__pycache__/
+
+# Database
+*.db
+*.sqlite3
+
+# pytest
+.pytest_cache/
+htmlcov/
+.coverage
+*.cover
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# pip
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Redis / Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Cache
+.cache/
