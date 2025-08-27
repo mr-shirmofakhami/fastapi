@@ -28,7 +28,9 @@ def list_users(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(7, ge=1, le=100, description="Max number of records to return"),
     role: Optional[str] = Query(None, description="Filter by role (admin or user)"),
-    search: Optional[str] = Query(None, description="Search by username")
+    search: Optional[str] = Query(None, description="Search by username"),
+    sort_by: Optional[str] = Query("id", description="Field to sort by (id, username, email, role)"),
+    sort_order: Optional[str] = Query("asc", description="Sort order: asc or desc")
 ):
     query = db.query(User)
 
@@ -37,6 +39,22 @@ def list_users(
         query = query.filter(User.role == role)
     if search:
         query = query.filter(User.username.ilike(f"%{search}%"))
+
+    # Sorting
+    valid_sort_fields = {
+        "id": User.id,
+        "username": User.username,
+        "email": User.email,
+        "role": User.role
+        # Add more fields here if needed, e.g. "created_at": User.created_at
+    }
+
+    sort_field = valid_sort_fields.get(sort_by, User.id)
+
+    if sort_order.lower() == "desc":
+        query = query.order_by(sort_field.desc())
+    else:
+        query = query.order_by(sort_field.asc())
 
     # Pagination
     users = query.offset(skip).limit(limit).all()
