@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from starlette import status
 from app.core.database import get_db
@@ -19,12 +21,26 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     return user_crud.create_user(db, user)
 
 
-@router.get("/", response_model=list[UserResponse])
+@router.get("/", response_model=list[UserResponse], summary="List users with pagination and filtering")
 def list_users(
     db: Session = Depends(get_db),
-_: User = Depends(get_current_admin)
+    _: User = Depends(get_current_admin),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(7, ge=1, le=100, description="Max number of records to return"),
+    role: Optional[str] = Query(None, description="Filter by role (admin or user)"),
+    search: Optional[str] = Query(None, description="Search by username")
 ):
-    return db.query(User).all()
+    query = db.query(User)
+
+    # Filtering
+    if role:
+        query = query.filter(User.role == role)
+    if search:
+        query = query.filter(User.username.ilike(f"%{search}%"))
+
+    # Pagination
+    users = query.offset(skip).limit(limit).all()
+    return users
 
 
 @router.get("/me", response_model=UserResponse)
