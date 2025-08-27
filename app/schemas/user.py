@@ -44,3 +44,8 @@ class UserLogin(BaseModel):
 
 class TokenRefreshRequest(BaseModel):
     refresh_token: str
+
+
+class PasswordChangeRequest(BaseModel):
+    old_password: constr(min_length=8)
+    new_password: constr(min_length=8)

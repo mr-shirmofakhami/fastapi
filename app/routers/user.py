@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from starlette import status
 from app.core.database import get_db
 from app.crud.token import revoke_all_tokens_for_user
 from app.crud.user import update_user_by_id, delete_user_by_id
-from app.schemas.user import UserCreate, UserUpdate, UserResponse
+from app.models.token import RefreshToken
+from app.schemas.user import UserCreate, UserUpdate, UserResponse, PasswordChangeRequest
 from app.crud import user as user_crud
-from app.utils.security import get_current_user, get_current_admin, owner_or_admin
+from app.utils.security import get_current_user, get_current_admin, owner_or_admin, verify_password, hash_password
 from app.models.user import User
 
 
@@ -19,8 +21,8 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
 
 @router.get("/", response_model=list[UserResponse])
 def list_users(
-    current_user: User = Depends(get_current_admin),  # 🔹 Only admins
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+_: User = Depends(get_current_admin)
 ):
     return db.query(User).all()
 
@@ -38,13 +40,6 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
     return db_user
 
 
-# @router.put("/{user_id}", response_model=UserResponse)
-# def update_user(user_id: int, user: UserUpdate, db: Session = Depends(get_db)):
-#     db_user = user_crud.update_user(db, user_id, user)
-#     if not db_user:
-#         raise HTTPException(status_code=404, detail="User not found")
-#     return db_user
-
 @router.put("/{user_id}", summary="Update a user (owner or admin)")
 def update_user(
     user_id: int,
@@ -58,30 +53,57 @@ def update_user(
     return updated_user
 
 
-# @router.delete("/{user_id}")
-# def delete_user(user_id: int, db: Session = Depends(get_db)):
-#     if not user_crud.delete_user(db, user_id):
-#         raise HTTPException(status_code=404, detail="User not found")
-#     return {"message": f"User {user_id} deleted successfully"}
-
-
-@router.delete("/{user_id}", summary="Delete a user (Owner or Admin)")
-def delete_user(
-        user_id: int,
-        db: Session = Depends(get_db),
-        _: object = Depends(owner_or_admin)
+@router.delete("/{user_id}", summary="Delete any user (Admin only)")
+def delete_user_by_admin(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_admin)
 ):
-    # Revoke refresh tokens first
-    revoke_all_tokens_for_user(db, user_id)
-
-    # Delete the user
-    success = delete_user_by_id(db, user_id)
-    if not success:
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    return {"message": f"User {user_id} deleted successfully"}
+    db.query(RefreshToken).filter(RefreshToken.user_id == user_id).delete()
+    db.delete(user)
+    db.commit()
+
+    return {"message": f"User with ID {user_id} deleted successfully"}
 
 
-# @router.get("/me", response_model=UserResponse)
-# def read_users_me(current_user: User = Depends(get_current_user)):
-#     return current_user
+@router.post("/change-password", summary="Change your own password")
+def change_password(
+    password_data: PasswordChangeRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # 1. Verify old password
+    if not verify_password(password_data.old_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Old password is incorrect"
+        )
+
+    # 2. Hash and store the new password
+    current_user.password_hash = hash_password(password_data.new_password)
+    db.commit()
+
+    # 3. Optional: Invalidate all refresh tokens for this user
+    db.query(RefreshToken).filter(RefreshToken.user_id == current_user.id).delete()
+    db.commit()
+
+    return {"message": "Password changed successfully. Please log in again."}
+
+
+@router.delete("/me", summary="Delete your own account")
+def delete_own_account(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Remove user's refresh tokens for security
+    db.query(RefreshToken).filter(RefreshToken.user_id == current_user.id).delete()
+
+    # Delete the user account
+    db.delete(current_user)
+    db.commit()
+
+    return {"message": "Your account has been deleted."}
